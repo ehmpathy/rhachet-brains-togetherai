@@ -2,7 +2,7 @@
   "name": "rhachet-brains-togetherai",
   "author": "ehmpathy",
   "description": "rhachet brain.atom adapter for together ai open-source models",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "repository": "ehmpathy/rhachet-brains-togetherai",
   "homepage": "https://github.com/ehmpathy/rhachet-brains-togetherai",
   "keywords": [
