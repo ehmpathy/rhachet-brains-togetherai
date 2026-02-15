@@ -13,8 +13,8 @@ on:
         type: string
         default: "us-east-1"
     secrets:
-      openai-api-key:
-        description: "api key for openai, used in integration tests"
+      together-api-key:
+        description: "api key for together ai, used in integration tests"
         required: true
 
 permissions:
@@ -171,7 +171,7 @@ jobs:
       - name: test:integration
         run: THOROUGH=true npm run test:integration
         env:
-          XAI_API_KEY: ${{ secrets.openai-api-key }}
+          TOGETHER_API_KEY: ${{ secrets.together-api-key }}
 
   test-acceptance-locally:
     runs-on: ubuntu-24.04
@@ -207,4 +207,4 @@ jobs:
       - name: test:acceptance:locally
         run: THOROUGH=true npm run test:acceptance:locally --if-present
         env:
-          XAI_API_KEY: ${{ secrets.openai-api-key }}
+          TOGETHER_API_KEY: ${{ secrets.together-api-key }}
