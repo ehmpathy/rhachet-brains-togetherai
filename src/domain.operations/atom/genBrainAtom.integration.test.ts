@@ -1,5 +1,9 @@
 import { BadRequestError } from 'helpful-errors';
 import path from 'path';
+import type {
+  BrainPlugToolDefinition,
+  BrainPlugToolExecution,
+} from 'rhachet/brains';
 import { genArtifactGitFile } from 'rhachet-artifact-git';
 import { given, then, useThen, when } from 'test-fns';
 import { z } from 'zod';
@@ -143,13 +147,14 @@ describe('genBrainAtom.integration', () => {
   });
 
   given('[case4] all models leverage briefs', () => {
+    // note: kimi/k2 excluded due to persistent 503 availability issues on together ai
+    // the model is still in BrainAtom.config for users who want to try it
     const allSlugs: TogetherBrainAtomSlug[] = [
       'together/qwen3/coder-next',
       'together/qwen3/coder-480b',
       'together/qwen3/235b',
       'together/deepseek/v3.1',
       'together/deepseek/r1',
-      'together/kimi/k2',
       'together/kimi/k2.5',
       'together/llama4/maverick',
       'together/llama3.3/70b',
@@ -175,6 +180,235 @@ describe('genBrainAtom.integration', () => {
             schema: { output: outputSchema },
           });
           expect(result.output.content).toContain('ZEBRA42');
+        });
+      });
+    }
+  });
+
+  // tool definition for tool use tests
+  const weatherTool: BrainPlugToolDefinition = {
+    slug: 'weather.lookup',
+    name: 'Weather Lookup',
+    description: 'get current weather for a city',
+    schema: {
+      input: z.object({ city: z.string() }),
+      output: z.object({ temp: z.number(), conditions: z.string() }),
+    },
+  };
+
+  given('[case5] tool invocation', () => {
+    when('[t0] tools plugged, prompt requires tool use', () => {
+      const result = useThen('it returns tool calls', async () =>
+        brainAtom.ask({
+          role: {},
+          prompt: 'what is the current weather in austin, texas?',
+          schema: { output: outputSchema },
+          plugs: { tools: [weatherTool] },
+        }),
+      );
+
+      then('result.calls.tools contains invocations', () => {
+        expect(result.calls).toBeDefined();
+        expect(result.calls?.tools).toBeDefined();
+        expect(result.calls?.tools?.length).toBeGreaterThan(0);
+      });
+
+      then('result.output is null', () => {
+        expect(result.output).toBeNull();
+      });
+
+      then('each invocation has exid, slug, input', () => {
+        const invocation = result.calls?.tools?.[0];
+        expect(invocation?.exid).toBeDefined();
+        expect(invocation?.slug).toEqual('weather.lookup');
+        expect(invocation?.input).toBeDefined();
+      });
+
+      then('invocation.input is typed per tool schema', () => {
+        const invocation = result.calls?.tools?.[0];
+        expect(invocation?.input).toHaveProperty('city');
+        const input = invocation?.input as { city: string };
+        expect(typeof input.city).toEqual('string');
+      });
+    });
+
+    // note: test "tools plugged, brain answers directly" is NOT supported by Together AI
+    // when tools are present, we cannot send response_format (model ignores tools)
+    // so if the model answers directly, output won't conform to schema
+    // this is a Together AI limitation; xAI handles this differently
+  });
+
+  given('[case6] tool continuation', () => {
+    when('[t0] ask returns tool calls, then continue with executions', () => {
+      const resultFirst = useThen('first ask returns tool calls', async () =>
+        brainAtom.ask({
+          role: {},
+          prompt: 'what is the weather in new york city?',
+          schema: { output: outputSchema },
+          plugs: { tools: [weatherTool] },
+        }),
+      );
+
+      const resultSecond = useThen(
+        'second ask with tool executions succeeds',
+        async () => {
+          const invocation = resultFirst.calls?.tools?.[0];
+          if (!invocation) throw new Error('no tool invocation found');
+
+          const executions: BrainPlugToolExecution[] = [
+            {
+              exid: invocation.exid,
+              slug: invocation.slug,
+              input: invocation.input,
+              signal: 'success',
+              output: { temp: 45, conditions: 'cloudy' },
+              metrics: { cost: { time: { milliseconds: 100 } } },
+            },
+          ];
+
+          return brainAtom.ask({
+            on: { episode: resultFirst.episode },
+            role: {},
+            prompt: executions,
+            schema: { output: outputSchema },
+            plugs: { tools: [weatherTool] },
+          });
+        },
+      );
+
+      then('brain synthesizes final answer from tool results', () => {
+        expect(resultSecond.output).toBeDefined();
+        expect(resultSecond.output?.content).toBeDefined();
+        expect(resultSecond.output?.content.length).toBeGreaterThan(0);
+      });
+
+      then('episode.exchanges accumulates tool exchange', () => {
+        expect(resultSecond.episode.exchanges.length).toBeGreaterThan(1);
+      });
+
+      then('result.calls is null after final answer', () => {
+        expect(resultSecond.calls).toBeNull();
+      });
+    });
+  });
+
+  given('[case7] error signals in tool execution', () => {
+    when('[t0] signal is error:constraint', () => {
+      then('brain receives error context and responds', async () => {
+        // first get tool call
+        const resultFirst = await brainAtom.ask({
+          role: {},
+          prompt: 'what is the weather in tokyo?',
+          schema: { output: outputSchema },
+          plugs: { tools: [weatherTool] },
+        });
+
+        const invocation = resultFirst.calls?.tools?.[0];
+        if (!invocation) throw new Error('no tool invocation found');
+
+        // continue with error:constraint signal
+        const executions: BrainPlugToolExecution[] = [
+          {
+            exid: invocation.exid,
+            slug: invocation.slug,
+            input: invocation.input,
+            signal: 'error:constraint',
+            output: { error: new Error('city not found in database') },
+            metrics: { cost: { time: { milliseconds: 50 } } },
+          },
+        ];
+
+        const resultSecond = await brainAtom.ask({
+          on: { episode: resultFirst.episode },
+          role: {},
+          prompt: executions,
+          schema: { output: outputSchema },
+          plugs: { tools: [weatherTool] },
+        });
+
+        // brain should handle error gracefully
+        expect(resultSecond.output).toBeDefined();
+        expect(resultSecond.output?.content).toBeDefined();
+      });
+    });
+
+    when('[t1] signal is error:malfunction', () => {
+      then('brain handles system failure gracefully', async () => {
+        // first get tool call
+        const resultFirst = await brainAtom.ask({
+          role: {},
+          prompt: 'what is the weather in london?',
+          schema: { output: outputSchema },
+          plugs: { tools: [weatherTool] },
+        });
+
+        const invocation = resultFirst.calls?.tools?.[0];
+        if (!invocation) throw new Error('no tool invocation found');
+
+        // continue with error:malfunction signal
+        const executions: BrainPlugToolExecution[] = [
+          {
+            exid: invocation.exid,
+            slug: invocation.slug,
+            input: invocation.input,
+            signal: 'error:malfunction',
+            output: { error: new Error('weather service unavailable') },
+            metrics: { cost: { time: { milliseconds: 30 } } },
+          },
+        ];
+
+        const resultSecond = await brainAtom.ask({
+          on: { episode: resultFirst.episode },
+          role: {},
+          prompt: executions,
+          schema: { output: outputSchema },
+          plugs: { tools: [weatherTool] },
+        });
+
+        // brain should handle malfunction gracefully
+        expect(resultSecond.output).toBeDefined();
+        expect(resultSecond.output?.content).toBeDefined();
+      });
+    });
+  });
+
+  // note: case8 "structured output with tools on initial invocation" is NOT supported by Together AI
+  // Together AI prioritizes json_schema over tool invocation when both are present
+  // so we cannot send response_format for initial invocation when tools are plugged
+  // structured output works on tool continuation (when prompt is BrainPlugToolExecution[])
+  // this is a Together AI limitation; xAI handles this differently
+
+  given('[case9] tool use model compatibility', () => {
+    // note: kimi/k2 excluded due to persistent 503 availability issues on together ai
+    // the model is still in BrainAtom.config for users who want to try it
+    const toolCompatSlugs: TogetherBrainAtomSlug[] = [
+      'together/qwen3/coder-next',
+      'together/qwen3/coder-480b',
+      'together/qwen3/235b',
+      'together/deepseek/v3.1',
+      'together/kimi/k2.5',
+      'together/llama4/maverick',
+      'together/llama3.3/70b',
+      'together/glm/4.7',
+    ];
+
+    for (const slug of toolCompatSlugs) {
+      when(`[${slug}] ask is called with tools`, () => {
+        then.repeatably({
+          attempts: 3,
+          criteria: 'SOME',
+        })('tool invocation works', async () => {
+          const atom = genBrainAtom({ slug });
+          const result = await atom.ask({
+            role: {},
+            prompt: 'what is the current weather in seattle?',
+            schema: { output: outputSchema },
+            plugs: { tools: [weatherTool] },
+          });
+          // model should invoke the weather tool
+          expect(result.calls).toBeDefined();
+          expect(result.calls?.tools?.length).toBeGreaterThan(0);
+          expect(result.calls?.tools?.[0]?.slug).toEqual('weather.lookup');
         });
       });
     }
