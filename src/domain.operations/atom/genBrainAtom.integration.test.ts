@@ -16,6 +16,9 @@ const BRIEFS_DIR = path.join(TEST_ASSETS_DIR, '/example.briefs');
 
 const outputSchema = z.object({ content: z.string() });
 
+// tool use requires z.string() schema (vllm cannot do structured output + tool calls together)
+const toolOutputSchema = z.string();
+
 if (!process.env.TOGETHER_API_KEY)
   throw new BadRequestError(
     'TOGETHER_API_KEY is required for integration tests',
@@ -26,6 +29,9 @@ describe('genBrainAtom.integration', () => {
 
   // use qwen3-coder-next for fast integration tests
   const brainAtom = genBrainAtom({ slug: 'together/qwen3/coder-next' });
+
+  // use kimi/k2.5 for tool use tests (good tool call capability)
+  const brainAtomWithTools = genBrainAtom({ slug: 'together/kimi/k2.5' });
 
   given('[case1] genBrainAtom({ slug: "together/qwen3/coder-next" })', () => {
     when('[t0] atom is created', () => {
@@ -199,10 +205,10 @@ describe('genBrainAtom.integration', () => {
   given('[case5] tool invocation', () => {
     when('[t0] tools plugged, prompt requires tool use', () => {
       const result = useThen('it returns tool calls', async () =>
-        brainAtom.ask({
+        brainAtomWithTools.ask({
           role: {},
           prompt: 'what is the current weather in austin, texas?',
-          schema: { output: outputSchema },
+          schema: { output: toolOutputSchema },
           plugs: { tools: [weatherTool] },
         }),
       );
@@ -241,10 +247,10 @@ describe('genBrainAtom.integration', () => {
   given('[case6] tool continuation', () => {
     when('[t0] ask returns tool calls, then continue with executions', () => {
       const resultFirst = useThen('first ask returns tool calls', async () =>
-        brainAtom.ask({
+        brainAtomWithTools.ask({
           role: {},
           prompt: 'what is the weather in new york city?',
-          schema: { output: outputSchema },
+          schema: { output: toolOutputSchema },
           plugs: { tools: [weatherTool] },
         }),
       );
@@ -266,11 +272,11 @@ describe('genBrainAtom.integration', () => {
             },
           ];
 
-          return brainAtom.ask({
+          return brainAtomWithTools.ask({
             on: { episode: resultFirst.episode },
             role: {},
             prompt: executions,
-            schema: { output: outputSchema },
+            schema: { output: toolOutputSchema },
             plugs: { tools: [weatherTool] },
           });
         },
@@ -278,8 +284,8 @@ describe('genBrainAtom.integration', () => {
 
       then('brain synthesizes final answer from tool results', () => {
         expect(resultSecond.output).toBeDefined();
-        expect(resultSecond.output?.content).toBeDefined();
-        expect(resultSecond.output?.content.length).toBeGreaterThan(0);
+        expect(resultSecond.output).not.toBeNull();
+        expect(typeof resultSecond.output).toEqual('string');
       });
 
       then('episode.exchanges accumulates tool exchange', () => {
@@ -296,10 +302,10 @@ describe('genBrainAtom.integration', () => {
     when('[t0] signal is error:constraint', () => {
       then('brain receives error context and responds', async () => {
         // first get tool call
-        const resultFirst = await brainAtom.ask({
+        const resultFirst = await brainAtomWithTools.ask({
           role: {},
           prompt: 'what is the weather in tokyo?',
-          schema: { output: outputSchema },
+          schema: { output: toolOutputSchema },
           plugs: { tools: [weatherTool] },
         });
 
@@ -318,27 +324,27 @@ describe('genBrainAtom.integration', () => {
           },
         ];
 
-        const resultSecond = await brainAtom.ask({
+        const resultSecond = await brainAtomWithTools.ask({
           on: { episode: resultFirst.episode },
           role: {},
           prompt: executions,
-          schema: { output: outputSchema },
+          schema: { output: toolOutputSchema },
           plugs: { tools: [weatherTool] },
         });
 
         // brain should handle error gracefully
         expect(resultSecond.output).toBeDefined();
-        expect(resultSecond.output?.content).toBeDefined();
+        expect(resultSecond.output).not.toBeNull();
       });
     });
 
     when('[t1] signal is error:malfunction', () => {
       then('brain handles system failure gracefully', async () => {
         // first get tool call
-        const resultFirst = await brainAtom.ask({
+        const resultFirst = await brainAtomWithTools.ask({
           role: {},
           prompt: 'what is the weather in london?',
-          schema: { output: outputSchema },
+          schema: { output: toolOutputSchema },
           plugs: { tools: [weatherTool] },
         });
 
@@ -357,17 +363,17 @@ describe('genBrainAtom.integration', () => {
           },
         ];
 
-        const resultSecond = await brainAtom.ask({
+        const resultSecond = await brainAtomWithTools.ask({
           on: { episode: resultFirst.episode },
           role: {},
           prompt: executions,
-          schema: { output: outputSchema },
+          schema: { output: toolOutputSchema },
           plugs: { tools: [weatherTool] },
         });
 
         // brain should handle malfunction gracefully
         expect(resultSecond.output).toBeDefined();
-        expect(resultSecond.output?.content).toBeDefined();
+        expect(resultSecond.output).not.toBeNull();
       });
     });
   });
@@ -402,13 +408,88 @@ describe('genBrainAtom.integration', () => {
           const result = await atom.ask({
             role: {},
             prompt: 'what is the current weather in seattle?',
-            schema: { output: outputSchema },
+            schema: { output: toolOutputSchema },
             plugs: { tools: [weatherTool] },
           });
           // model should invoke the weather tool
           expect(result.calls).toBeDefined();
           expect(result.calls?.tools?.length).toBeGreaterThan(0);
           expect(result.calls?.tools?.[0]?.slug).toEqual('weather.lookup');
+        });
+      });
+    }
+  });
+
+  given('[case10] tool use on open-source models', () => {
+    const calculatorTool: BrainPlugToolDefinition = {
+      slug: 'calculator.multiply',
+      name: 'Calculator Multiply',
+      description: 'Multiplies two numbers together',
+      schema: {
+        input: z.object({
+          a: z.number().describe('First number'),
+          b: z.number().describe('Second number'),
+        }),
+        output: z.object({ result: z.number() }),
+      },
+    };
+
+    // test tool use on models that support it
+    const modelsToTest: TogetherBrainAtomSlug[] = [
+      'together/kimi/k2.5',
+      'together/glm/4.7',
+    ];
+
+    for (const slug of modelsToTest) {
+      when(`[${slug}] tool invocation and continuation`, () => {
+        then.repeatably({
+          attempts: 3,
+          criteria: 'SOME',
+        })('tool call + continuation works', async () => {
+          const atom = genBrainAtom({ slug });
+
+          // first call: brain should request tool
+          const resultFirst = await atom.ask({
+            role: {},
+            prompt:
+              'Call the calculator tool to multiply 6 times 9. You must call the tool.',
+            plugs: { tools: [calculatorTool] },
+            schema: { output: toolOutputSchema },
+          });
+
+          // verify tool call is returned
+          expect(resultFirst.output).toBeNull();
+          expect(resultFirst.calls?.tools).toBeDefined();
+          expect(resultFirst.calls?.tools?.length).toBeGreaterThan(0);
+          expect(resultFirst.calls?.tools?.[0]?.slug).toEqual(
+            'calculator.multiply',
+          );
+
+          // second call: feed tool result, expect text output
+          const toolCall = resultFirst.calls?.tools?.[0];
+          if (!toolCall) throw new Error('no tool call in first result');
+
+          const resultSecond = await atom.ask({
+            on: { episode: resultFirst.episode },
+            role: {},
+            prompt: [
+              {
+                exid: toolCall.exid,
+                slug: toolCall.slug,
+                input: toolCall.input,
+                signal: 'success' as const,
+                output: { result: 54 },
+                metrics: { cost: { time: { milliseconds: 1 } } },
+              },
+            ],
+            plugs: { tools: [calculatorTool] },
+            schema: { output: toolOutputSchema },
+          });
+
+          // verify output is valid string with result
+          expect(resultSecond.output).not.toBeNull();
+          expect(typeof resultSecond.output).toEqual('string');
+          expect(resultSecond.output).toContain('54');
         });
       });
     }
