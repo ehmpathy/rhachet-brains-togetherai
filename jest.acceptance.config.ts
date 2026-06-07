@@ -23,8 +23,7 @@ const config: Config = {
     '^.+\\.(t|j)sx?$': '@swc/jest',
   },
   transformIgnorePatterns: [
-    // here's an example of how to ignore esm module transformation, when needed
-    // 'node_modules/(?!(@octokit|universal-user-agent|before-after-hook)/)',
+    // rhachet has many ESM deps - transform all via empty pattern
   ],
   testMatch: ['**/*.acceptance.test.ts', '!**/.yalc/**'],
   setupFilesAfterEnv: ['./jest.acceptance.env.ts'],

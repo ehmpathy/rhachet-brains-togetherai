@@ -16,16 +16,28 @@ export type BrainAtomConfig = {
  * .why = enables type-safe slug specification with model variants
  */
 export type TogetherBrainAtomSlug =
-  | 'together/qwen3/coder-next'
-  | 'together/qwen3/coder-480b'
+  // qwen family (serverless)
   | 'together/qwen3/235b'
-  | 'together/deepseek/v3.1'
-  | 'together/deepseek/r1'
-  | 'together/kimi/k2'
-  | 'together/kimi/k2.5'
-  | 'together/llama4/maverick'
+  | 'together/qwen3.5/9b'
+  | 'together/qwen3.5/397b'
+  | 'together/qwen3.6/plus'
+  | 'together/qwen3.7/max'
+  // deepseek family (serverless)
+  | 'together/deepseek/v4-pro'
+  // kimi family (serverless)
+  | 'together/kimi/k2.6'
+  // llama family (serverless)
   | 'together/llama3.3/70b'
-  | 'together/glm/4.7';
+  // glm family (serverless)
+  | 'together/glm/5'
+  | 'together/glm/5.1'
+  // gemma family
+  | 'together/gemma4/31b'
+  // liquid family
+  | 'together/lfm2/24b'
+  // openai oss
+  | 'together/gpt-oss/20b'
+  | 'together/gpt-oss/120b';
 
 /**
  * .what = model configuration by slug
@@ -40,78 +52,6 @@ export const CONFIG_BY_ATOM_SLUG: Record<
   TogetherBrainAtomSlug,
   BrainAtomConfig
 > = {
-  /**
-   * qwen3-coder-next
-   * .sources:
-   *   - rates: https://www.together.ai/pricing ($0.50/1M input, $1.20/1M output)
-   *   - context: 262K
-   *   - swe-bench: 74.2% verified
-   *   - architecture: 80B total, 3B active (moe)
-   */
-  'together/qwen3/coder-next': {
-    model: 'Qwen/Qwen3-Coder-Next-FP8',
-    description: 'qwen3-coder-next - best cost/performance for code (262K)',
-    spec: new BrainSpec({
-      cost: {
-        time: {
-          speed: { tokens: 150, per: { seconds: 1 } },
-          latency: { seconds: 0.5 },
-        },
-        cash: {
-          per: 'token',
-          cache: {
-            get: asIsoPrice('$0'), // no cache rate on together ai
-            set: asIsoPrice('$0'),
-          },
-          input: dividePrice({ of: '$0.50', by: 1_000_000 }), // $0.50/1M tokens
-          output: dividePrice({ of: '$1.20', by: 1_000_000 }), // $1.20/1M tokens
-        },
-      },
-      gain: {
-        size: { context: { tokens: 262_000 } }, // 262K context
-        grades: { swe: 74.2 }, // 74.2% swe-bench verified
-        cutoff: '2025-06-01',
-        domain: 'SOFTWARE',
-        skills: { tooluse: true },
-      },
-    }),
-  },
-  /**
-   * qwen3-coder-480b
-   * .sources:
-   *   - rates: https://www.together.ai/pricing ($2.00/1M input, $2.00/1M output)
-   *   - context: 262K
-   *   - swe-bench: 69.6% verified
-   *   - architecture: 480B total, 35B active (moe)
-   */
-  'together/qwen3/coder-480b': {
-    model: 'Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8',
-    description: 'qwen3-coder-480b - large code model (262K)',
-    spec: new BrainSpec({
-      cost: {
-        time: {
-          speed: { tokens: 80, per: { seconds: 1 } },
-          latency: { seconds: 1 },
-        },
-        cash: {
-          per: 'token',
-          cache: {
-            get: asIsoPrice('$0'),
-            set: asIsoPrice('$0'),
-          },
-          input: dividePrice({ of: '$2.00', by: 1_000_000 }), // $2.00/1M tokens
-          output: dividePrice({ of: '$2.00', by: 1_000_000 }), // $2.00/1M tokens
-        },
-      },
-      gain: {
-        size: { context: { tokens: 262_000 } }, // 262K context
-        grades: { swe: 69.6 }, // 69.6% swe-bench verified
-        cutoff: '2025-06-01',
-        domain: 'SOFTWARE',
-        skills: { tooluse: true },
-      },
-    }),
-  },
   /**
    * qwen3-235b
    * .sources:
@@ -148,184 +88,9 @@ export const CONFIG_BY_ATOM_SLUG: Record<
     }),
   },
   /**
-   * deepseek-v3.1
-   * .sources:
-   *   - rates: https://www.together.ai/pricing ($1.25/1M input, $1.25/1M output)
-   *   - context: 128K
-   *   - architecture: 671B total, 37B active (moe)
-   */
-  'together/deepseek/v3.1': {
-    model: 'deepseek-ai/DeepSeek-V3.1',
-    description: 'deepseek-v3.1 - frontier open-source (128K)',
-    spec: new BrainSpec({
-      cost: {
-        time: {
-          speed: { tokens: 100, per: { seconds: 1 } },
-          latency: { seconds: 1 },
-        },
-        cash: {
-          per: 'token',
-          cache: {
-            get: asIsoPrice('$0'),
-            set: asIsoPrice('$0'),
-          },
-          input: dividePrice({ of: '$1.25', by: 1_000_000 }), // $1.25/1M tokens
-          output: dividePrice({ of: '$1.25', by: 1_000_000 }), // $1.25/1M tokens
-        },
-      },
-      gain: {
-        size: { context: { tokens: 128_000 } }, // 128K context
-        grades: {},
-        cutoff: '2025-03-01',
-        domain: 'ALL',
-        skills: { tooluse: true },
-      },
-    }),
-  },
-  /**
-   * deepseek-r1
-   * .sources:
-   *   - rates: https://www.together.ai/pricing ($3.00/1M input, $7.00/1M output)
-   *   - context: 128K
-   *   - architecture: 671B total, 37B active (moe), chain-of-thought
-   */
-  'together/deepseek/r1': {
-    model: 'deepseek-ai/DeepSeek-R1',
-    description: 'deepseek-r1 - chain-of-thought (128K)',
-    spec: new BrainSpec({
-      cost: {
-        time: {
-          speed: { tokens: 60, per: { seconds: 1 } },
-          latency: { seconds: 1.5 },
-        },
-        cash: {
-          per: 'token',
-          cache: {
-            get: asIsoPrice('$0'),
-            set: asIsoPrice('$0'),
-          },
-          input: dividePrice({ of: '$3.00', by: 1_000_000 }), // $3.00/1M tokens
-          output: dividePrice({ of: '$7.00', by: 1_000_000 }), // $7.00/1M tokens
-        },
-      },
-      gain: {
-        size: { context: { tokens: 128_000 } }, // 128K context
-        grades: {},
-        cutoff: '2025-03-01',
-        domain: 'ALL',
-        skills: { tooluse: true },
-      },
-    }),
-  },
-  /**
-   * kimi-k2
-   * .sources:
-   *   - rates: https://www.together.ai/pricing ($1.00/1M input, $3.00/1M output)
-   *   - context: 128K
-   *   - architecture: 1T total (moe)
-   */
-  'together/kimi/k2': {
-    model: 'moonshotai/Kimi-K2-Instruct',
-    description: 'kimi-k2 - large general purpose (128K)',
-    spec: new BrainSpec({
-      cost: {
-        time: {
-          speed: { tokens: 80, per: { seconds: 1 } },
-          latency: { seconds: 1 },
-        },
-        cash: {
-          per: 'token',
-          cache: {
-            get: asIsoPrice('$0'),
-            set: asIsoPrice('$0'),
-          },
-          input: dividePrice({ of: '$1.00', by: 1_000_000 }), // $1.00/1M tokens
-          output: dividePrice({ of: '$3.00', by: 1_000_000 }), // $3.00/1M tokens
-        },
-      },
-      gain: {
-        size: { context: { tokens: 128_000 } }, // 128K context
-        grades: {},
-        cutoff: '2025-06-01',
-        domain: 'ALL',
-        skills: { tooluse: true },
-      },
-    }),
-  },
-  /**
-   * kimi-k2.5
-   * .sources:
-   *   - rates: https://www.together.ai/pricing ($0.50/1M input, $2.80/1M output)
-   *   - context: 128K
-   *   - swe-bench: 76.8% verified
-   */
-  'together/kimi/k2.5': {
-    model: 'moonshotai/Kimi-K2.5',
-    description: 'kimi-k2.5 - best swe-bench on together ai (128K)',
-    spec: new BrainSpec({
-      cost: {
-        time: {
-          speed: { tokens: 100, per: { seconds: 1 } },
-          latency: { seconds: 0.8 },
-        },
-        cash: {
-          per: 'token',
-          cache: {
-            get: asIsoPrice('$0'),
-            set: asIsoPrice('$0'),
-          },
-          input: dividePrice({ of: '$0.50', by: 1_000_000 }), // $0.50/1M tokens
-          output: dividePrice({ of: '$2.80', by: 1_000_000 }), // $2.80/1M tokens
-        },
-      },
-      gain: {
-        size: { context: { tokens: 128_000 } }, // 128K context
-        grades: { swe: 76.8 }, // 76.8% swe-bench verified
-        cutoff: '2025-07-01',
-        domain: 'ALL',
-        skills: { tooluse: true },
-      },
-    }),
-  },
-  /**
-   * llama-4-maverick
-   * .sources:
-   *   - rates: https://www.together.ai/pricing ($0.27/1M input, $0.85/1M output)
-   *   - context: 1M
-   *   - architecture: 17B active, 128 experts (moe)
-   */
-  'together/llama4/maverick': {
-    model: 'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8',
-    description: 'llama-4-maverick - large context (1M)',
-    spec: new BrainSpec({
-      cost: {
-        time: {
-          speed: { tokens: 120, per: { seconds: 1 } },
-          latency: { seconds: 0.5 },
-        },
-        cash: {
-          per: 'token',
-          cache: {
-            get: asIsoPrice('$0'),
-            set: asIsoPrice('$0'),
-          },
-          input: dividePrice({ of: '$0.27', by: 1_000_000 }), // $0.27/1M tokens
-          output: dividePrice({ of: '$0.85', by: 1_000_000 }), // $0.85/1M tokens
-        },
-      },
-      gain: {
-        size: { context: { tokens: 1_000_000 } }, // 1M context
-        grades: {},
-        cutoff: '2025-03-01',
-        domain: 'ALL',
-        skills: { tooluse: true },
-      },
-    }),
-  },
-  /**
    * llama-3.3-70b
    * .sources:
-   *   - rates: https://www.together.ai/pricing ($0.88/1M input, $0.88/1M output)
+   *   - rates: https://www.together.ai/pricing ($0.88/1M input, $1.04/1M output)
    *   - context: 128K
    *   - architecture: 70B dense
    */
@@ -345,7 +110,7 @@ export const CONFIG_BY_ATOM_SLUG: Record<
             set: asIsoPrice('$0'),
           },
           input: dividePrice({ of: '$0.88', by: 1_000_000 }), // $0.88/1M tokens
-          output: dividePrice({ of: '$0.88', by: 1_000_000 }), // $0.88/1M tokens
+          output: dividePrice({ of: '$1.04', by: 1_000_000 }), // $1.04/1M tokens
         },
       },
       gain: {
@@ -357,20 +122,132 @@ export const CONFIG_BY_ATOM_SLUG: Record<
       },
     }),
   },
+  // ============================================================================
+  // new models (2026-06 bump)
+  // ============================================================================
+
   /**
-   * glm-4.7
+   * qwen3.5-9b
    * .sources:
-   *   - rates: https://www.together.ai/pricing ($0.45/1M input, $2.00/1M output)
-   *   - context: 128K
-   *   - swe-bench: 73.8% verified
+   *   - model: https://www.together.ai/models/qwen3-5-9b
+   *   - rates: $0.17/1M input, $0.25/1M output
+   *   - context: 262K
+   *   - architecture: 9B dense
    */
-  'together/glm/4.7': {
-    model: 'zai-org/GLM-4.7',
-    description: 'glm-4.7 - strong code + general (128K)',
+  'together/qwen3.5/9b': {
+    model: 'Qwen/Qwen3.5-9B',
+    description: 'qwen3.5-9b - cheap small model (262K)',
+    spec: new BrainSpec({
+      cost: {
+        time: {
+          speed: { tokens: 200, per: { seconds: 1 } },
+          latency: { seconds: 0.3 },
+        },
+        cash: {
+          per: 'token',
+          cache: {
+            get: asIsoPrice('$0'),
+            set: asIsoPrice('$0'),
+          },
+          input: dividePrice({ of: '$0.17', by: 1_000_000 }), // $0.17/1M tokens
+          output: dividePrice({ of: '$0.25', by: 1_000_000 }), // $0.25/1M tokens
+        },
+      },
+      gain: {
+        size: { context: { tokens: 262_000 } }, // 262K context
+        grades: {},
+        cutoff: '2026-01-01',
+        domain: 'ALL',
+        skills: { tooluse: true },
+      },
+    }),
+  },
+  /**
+   * qwen3.5-397b
+   * .sources:
+   *   - model: https://www.together.ai/models/qwen3-5-397b-a17b
+   *   - rates: $0.60/1M input, $3.60/1M output
+   *   - context: 262K
+   *   - swe-bench: 76.4% verified
+   *   - architecture: 397B total, 17B active (moe)
+   */
+  'together/qwen3.5/397b': {
+    model: 'Qwen/Qwen3.5-397B-A17B',
+    description: 'qwen3.5-397b - large moe with vision (262K)',
+    spec: new BrainSpec({
+      cost: {
+        time: {
+          speed: { tokens: 80, per: { seconds: 1 } },
+          latency: { seconds: 1 },
+        },
+        cash: {
+          per: 'token',
+          cache: {
+            get: asIsoPrice('$0'),
+            set: asIsoPrice('$0'),
+          },
+          input: dividePrice({ of: '$0.60', by: 1_000_000 }), // $0.60/1M tokens
+          output: dividePrice({ of: '$3.60', by: 1_000_000 }), // $3.60/1M tokens
+        },
+      },
+      gain: {
+        size: { context: { tokens: 262_000 } }, // 262K context
+        grades: { swe: 76.4 }, // 76.4% swe-bench verified
+        cutoff: '2026-01-01',
+        domain: 'ALL',
+        skills: { tooluse: true },
+      },
+    }),
+  },
+  /**
+   * qwen3.6-plus
+   * .sources:
+   *   - model: https://www.together.ai/models/qwen3-6-plus
+   *   - rates: $0.40/1M input, $1.60/1M output
+   *   - context: 262K
+   */
+  'together/qwen3.6/plus': {
+    model: 'Qwen/Qwen3.6-Plus',
+    description: 'qwen3.6-plus - balanced (262K)',
     spec: new BrainSpec({
       cost: {
         time: {
           speed: { tokens: 100, per: { seconds: 1 } },
+          latency: { seconds: 0.6 },
+        },
+        cash: {
+          per: 'token',
+          cache: {
+            get: asIsoPrice('$0'),
+            set: asIsoPrice('$0'),
+          },
+          input: dividePrice({ of: '$0.40', by: 1_000_000 }), // $0.40/1M tokens
+          output: dividePrice({ of: '$1.60', by: 1_000_000 }), // $1.60/1M tokens
+        },
+      },
+      gain: {
+        size: { context: { tokens: 262_000 } }, // 262K context
+        grades: {},
+        cutoff: '2026-03-01',
+        domain: 'ALL',
+        skills: { tooluse: true },
+      },
+    }),
+  },
+  /**
+   * qwen3.7-max
+   * .sources:
+   *   - model: https://www.together.ai/models/qwen3-7-max
+   *   - rates: $0.80/1M input, $2.40/1M output
+   *   - context: 262K
+   */
+  'together/qwen3.7/max': {
+    model: 'Qwen/Qwen3.7-Max',
+    description: 'qwen3.7-max - balanced flagship (262K)',
+    spec: new BrainSpec({
+      cost: {
+        time: {
+          speed: { tokens: 90, per: { seconds: 1 } },
           latency: { seconds: 0.8 },
         },
         cash: {
@@ -379,16 +256,305 @@ export const CONFIG_BY_ATOM_SLUG: Record<
             get: asIsoPrice('$0'),
             set: asIsoPrice('$0'),
           },
-          input: dividePrice({ of: '$0.45', by: 1_000_000 }), // $0.45/1M tokens
-          output: dividePrice({ of: '$2.00', by: 1_000_000 }), // $2.00/1M tokens
+          input: dividePrice({ of: '$0.80', by: 1_000_000 }), // $0.80/1M tokens
+          output: dividePrice({ of: '$2.40', by: 1_000_000 }), // $2.40/1M tokens
+        },
+      },
+      gain: {
+        size: { context: { tokens: 262_000 } }, // 262K context
+        grades: {},
+        cutoff: '2026-04-01',
+        domain: 'ALL',
+        skills: { tooluse: true },
+      },
+    }),
+  },
+  /**
+   * deepseek-v4-pro
+   * .sources:
+   *   - model: https://www.together.ai/models/deepseek-v4-pro
+   *   - rates: $2.10/1M input, $4.40/1M output, cache: $0.20/1M
+   *   - context: 512K
+   *   - swe-bench: 80.6% verified
+   *   - architecture: 1.6T total, 49B active (moe)
+   */
+  'together/deepseek/v4-pro': {
+    model: 'deepseek-ai/DeepSeek-V4-Pro',
+    description: 'deepseek-v4-pro - frontier code (512K, 80.6% swe)',
+    spec: new BrainSpec({
+      cost: {
+        time: {
+          speed: { tokens: 80, per: { seconds: 1 } },
+          latency: { seconds: 1.2 },
+        },
+        cash: {
+          per: 'token',
+          cache: {
+            get: dividePrice({ of: '$0.20', by: 1_000_000 }), // $0.20/1M cached
+            set: asIsoPrice('$0'),
+          },
+          input: dividePrice({ of: '$2.10', by: 1_000_000 }), // $2.10/1M tokens
+          output: dividePrice({ of: '$4.40', by: 1_000_000 }), // $4.40/1M tokens
+        },
+      },
+      gain: {
+        size: { context: { tokens: 512_000 } }, // 512K context
+        grades: { swe: 80.6 }, // 80.6% swe-bench verified
+        cutoff: '2026-04-01',
+        domain: 'ALL',
+        skills: { tooluse: true },
+      },
+    }),
+  },
+  /**
+   * kimi-k2.6
+   * .sources:
+   *   - model: https://www.together.ai/models/kimi-k26
+   *   - rates: $1.20/1M input, $4.50/1M output, cache: $0.20/1M
+   *   - context: 256K
+   *   - swe-bench: 80.2% verified
+   *   - architecture: 1T total, 32B active (moe)
+   */
+  'together/kimi/k2.6': {
+    model: 'moonshotai/Kimi-K2.6',
+    description: 'kimi-k2.6 - frontier code (256K, 80.2% swe)',
+    spec: new BrainSpec({
+      cost: {
+        time: {
+          speed: { tokens: 90, per: { seconds: 1 } },
+          latency: { seconds: 1 },
+        },
+        cash: {
+          per: 'token',
+          cache: {
+            get: dividePrice({ of: '$0.20', by: 1_000_000 }), // $0.20/1M cached
+            set: asIsoPrice('$0'),
+          },
+          input: dividePrice({ of: '$1.20', by: 1_000_000 }), // $1.20/1M tokens
+          output: dividePrice({ of: '$4.50', by: 1_000_000 }), // $4.50/1M tokens
+        },
+      },
+      gain: {
+        size: { context: { tokens: 256_000 } }, // 256K context
+        grades: { swe: 80.2 }, // 80.2% swe-bench verified
+        cutoff: '2026-05-01',
+        domain: 'ALL',
+        skills: { tooluse: true },
+      },
+    }),
+  },
+  /**
+   * glm-5
+   * .sources:
+   *   - model: https://www.together.ai/models/glm-5
+   *   - rates: $1.00/1M input, $3.00/1M output
+   *   - context: 200K
+   *   - architecture: 744B total, 40B active (moe)
+   */
+  'together/glm/5': {
+    model: 'zai-org/GLM-5',
+    description: 'glm-5 - frontier (200K)',
+    spec: new BrainSpec({
+      cost: {
+        time: {
+          speed: { tokens: 90, per: { seconds: 1 } },
+          latency: { seconds: 0.9 },
+        },
+        cash: {
+          per: 'token',
+          cache: {
+            get: asIsoPrice('$0'),
+            set: asIsoPrice('$0'),
+          },
+          input: dividePrice({ of: '$1.00', by: 1_000_000 }), // $1.00/1M tokens
+          output: dividePrice({ of: '$3.00', by: 1_000_000 }), // $3.00/1M tokens
+        },
+      },
+      gain: {
+        size: { context: { tokens: 200_000 } }, // 200K context
+        grades: {},
+        cutoff: '2026-02-01',
+        domain: 'ALL',
+        skills: { tooluse: true },
+      },
+    }),
+  },
+  /**
+   * glm-5.1
+   * .sources:
+   *   - model: https://www.together.ai/models/glm-51
+   *   - rates: $1.40/1M input, $4.40/1M output
+   *   - context: 200K
+   *   - swe-bench: 77.8% verified
+   *   - architecture: 754B total, 40B active (moe)
+   */
+  'together/glm/5.1': {
+    model: 'zai-org/GLM-5.1',
+    description: 'glm-5.1 - frontier code (200K, 77.8% swe)',
+    spec: new BrainSpec({
+      cost: {
+        time: {
+          speed: { tokens: 80, per: { seconds: 1 } },
+          latency: { seconds: 1 },
+        },
+        cash: {
+          per: 'token',
+          cache: {
+            get: asIsoPrice('$0'),
+            set: asIsoPrice('$0'),
+          },
+          input: dividePrice({ of: '$1.40', by: 1_000_000 }), // $1.40/1M tokens
+          output: dividePrice({ of: '$4.40', by: 1_000_000 }), // $4.40/1M tokens
+        },
+      },
+      gain: {
+        size: { context: { tokens: 200_000 } }, // 200K context
+        grades: { swe: 77.8 }, // 77.8% swe-bench verified
+        cutoff: '2026-02-01',
+        domain: 'ALL',
+        skills: { tooluse: true },
+      },
+    }),
+  },
+  /**
+   * gemma-4-31b
+   * .sources:
+   *   - model: https://www.together.ai/models/gemma-4-31b
+   *   - rates: $0.39/1M input, $0.97/1M output
+   *   - context: 256K
+   *   - vision: supported
+   */
+  'together/gemma4/31b': {
+    model: 'google/gemma-4-31B-it',
+    description: 'gemma4-31b - vision capable (256K)',
+    spec: new BrainSpec({
+      cost: {
+        time: {
+          speed: { tokens: 120, per: { seconds: 1 } },
+          latency: { seconds: 0.5 },
+        },
+        cash: {
+          per: 'token',
+          cache: {
+            get: asIsoPrice('$0'),
+            set: asIsoPrice('$0'),
+          },
+          input: dividePrice({ of: '$0.39', by: 1_000_000 }), // $0.39/1M tokens
+          output: dividePrice({ of: '$0.97', by: 1_000_000 }), // $0.97/1M tokens
+        },
+      },
+      gain: {
+        size: { context: { tokens: 256_000 } }, // 256K context
+        grades: {},
+        cutoff: '2026-03-01',
+        domain: 'ALL',
+        skills: { tooluse: true },
+      },
+    }),
+  },
+  /**
+   * lfm2-24b
+   * .sources:
+   *   - model: https://www.together.ai/models/lfm2-24b-a2b
+   *   - rates: $0.03/1M input, $0.12/1M output
+   *   - context: 32K
+   *   - architecture: 24B total, 2B active (moe)
+   */
+  'together/lfm2/24b': {
+    model: 'LiquidAI/LFM2-24B-A2B',
+    description: 'lfm2-24b - ultra cheap (32K)',
+    spec: new BrainSpec({
+      cost: {
+        time: {
+          speed: { tokens: 200, per: { seconds: 1 } },
+          latency: { seconds: 0.2 },
+        },
+        cash: {
+          per: 'token',
+          cache: {
+            get: asIsoPrice('$0'),
+            set: asIsoPrice('$0'),
+          },
+          input: dividePrice({ of: '$0.03', by: 1_000_000 }), // $0.03/1M tokens
+          output: dividePrice({ of: '$0.12', by: 1_000_000 }), // $0.12/1M tokens
+        },
+      },
+      gain: {
+        size: { context: { tokens: 32_000 } }, // 32K context
+        grades: {},
+        cutoff: '2026-01-01',
+        domain: 'ALL',
+        skills: { tooluse: false }, // tool use not confirmed
+      },
+    }),
+  },
+  /**
+   * gpt-oss-20b
+   * .sources:
+   *   - model: https://www.together.ai/models/gpt-oss-20b
+   *   - rates: $0.05/1M input, $0.20/1M output
+   *   - context: 128K
+   */
+  'together/gpt-oss/20b': {
+    model: 'openai/gpt-oss-20b',
+    description: 'gpt-oss-20b - cheap openai-style (128K)',
+    spec: new BrainSpec({
+      cost: {
+        time: {
+          speed: { tokens: 180, per: { seconds: 1 } },
+          latency: { seconds: 0.3 },
+        },
+        cash: {
+          per: 'token',
+          cache: {
+            get: asIsoPrice('$0'),
+            set: asIsoPrice('$0'),
+          },
+          input: dividePrice({ of: '$0.05', by: 1_000_000 }), // $0.05/1M tokens
+          output: dividePrice({ of: '$0.20', by: 1_000_000 }), // $0.20/1M tokens
         },
       },
       gain: {
         size: { context: { tokens: 128_000 } }, // 128K context
-        grades: { swe: 73.8 }, // 73.8% swe-bench verified
-        cutoff: '2025-06-01',
+        grades: {},
+        cutoff: '2026-01-01',
         domain: 'ALL',
-        skills: { tooluse: true },
+        skills: { tooluse: false }, // tool use not confirmed
+      },
+    }),
+  },
+  /**
+   * gpt-oss-120b
+   * .sources:
+   *   - model: https://www.together.ai/models/gpt-oss-120b
+   *   - rates: $0.40/1M input, $1.20/1M output
+   *   - context: 128K
+   */
+  'together/gpt-oss/120b': {
+    model: 'openai/gpt-oss-120b',
+    description: 'gpt-oss-120b - mid-tier openai-style (128K)',
+    spec: new BrainSpec({
+      cost: {
+        time: {
+          speed: { tokens: 100, per: { seconds: 1 } },
+          latency: { seconds: 0.5 },
+        },
+        cash: {
+          per: 'token',
+          cache: {
+            get: asIsoPrice('$0'),
+            set: asIsoPrice('$0'),
+          },
+          input: dividePrice({ of: '$0.40', by: 1_000_000 }), // $0.40/1M tokens
+          output: dividePrice({ of: '$1.20', by: 1_000_000 }), // $1.20/1M tokens
+        },
+      },
+      gain: {
+        size: { context: { tokens: 128_000 } }, // 128K context
+        grades: {},
+        cutoff: '2026-01-01',
+        domain: 'ALL',
+        skills: { tooluse: false }, // tool use not confirmed
       },
     }),
   },

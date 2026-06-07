@@ -7,9 +7,9 @@ import { getBrainAtomsByTogetherAI } from './index';
 describe('rhachet-brains-togetherai.unit', () => {
   given('[case1] getBrainAtomsByTogetherAI', () => {
     when('[t0] called', () => {
-      then('returns array with 10 atoms', () => {
+      then('returns array with 14 atoms', () => {
         const atoms = getBrainAtomsByTogetherAI();
-        expect(atoms).toHaveLength(10);
+        expect(atoms).toHaveLength(14);
       });
 
       then('returns BrainAtom instances', () => {
@@ -19,24 +19,24 @@ describe('rhachet-brains-togetherai.unit', () => {
         }
       });
 
-      then('includes together/qwen3/coder-next', () => {
+      then('includes together/deepseek/v4-pro', () => {
         const atoms = getBrainAtomsByTogetherAI();
         const slugs = atoms.map((a: BrainAtom) => a.slug);
-        expect(slugs).toContain('together/qwen3/coder-next');
+        expect(slugs).toContain('together/deepseek/v4-pro');
       });
     });
   });
 
   given('[case2] genBrainAtom factory', () => {
-    when('[t0] called with together/qwen3/coder-next slug', () => {
-      const atom = genBrainAtom({ slug: 'together/qwen3/coder-next' });
+    when('[t0] called with together/deepseek/v4-pro slug', () => {
+      const atom = genBrainAtom({ slug: 'together/deepseek/v4-pro' });
 
       then('returns BrainAtom instance', () => {
         expect(atom).toBeInstanceOf(BrainAtom);
       });
 
       then('has correct slug', () => {
-        expect(atom.slug).toEqual('together/qwen3/coder-next');
+        expect(atom.slug).toEqual('together/deepseek/v4-pro');
       });
 
       then('has correct repo', () => {
