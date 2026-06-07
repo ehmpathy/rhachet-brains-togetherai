@@ -4,3 +4,5 @@ extends:
 env.prod: null
 env.prep: null
 env.test: null
+env.all:
+  - TOGETHER_API_KEY

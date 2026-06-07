@@ -25,9 +25,7 @@ const config: Config = {
     '^.+\\.mjs$': '@swc/jest',
   },
   transformIgnorePatterns: [
-    // transform ESM packages that jest needs to handle
-    // pattern handles both direct node_modules and pnpm's .pnpm structure
-    '/node_modules/(?!(\\.pnpm/(@anthropic-ai|@openai))|(@anthropic-ai|@openai)/)',
+    // rhachet has many ESM deps - transform all via empty pattern
   ],
   // resolve ESM modules from node_modules
   extensionsToTreatAsEsm: ['.ts'],

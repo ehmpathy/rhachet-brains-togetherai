@@ -1,4 +1,4 @@
-import { BadRequestError } from 'helpful-errors';
+import { BadRequestError, UnexpectedCodePathError } from 'helpful-errors';
 import OpenAI from 'openai';
 import {
   BrainAtom,
@@ -36,14 +36,19 @@ export type { TogetherBrainAtomSlug } from './BrainAtom.config';
  * .note = together ai api is openai-compatible with baseURL override
  *
  * .example
- *   genBrainAtom({ slug: 'together/qwen3/coder-next' })
- *   genBrainAtom({ slug: 'together/llama3.3/70b' }) // fast + cheap
- *   genBrainAtom({ slug: 'together/kimi/k2.5' }) // best swe-bench
+ *   genBrainAtom({ slug: 'together/lfm2/24b' })        // ultra cheap
+ *   genBrainAtom({ slug: 'together/llama3.3/70b' })    // balanced
+ *   genBrainAtom({ slug: 'together/deepseek/v4-pro' }) // frontier (80.6% swe)
  */
 export const genBrainAtom = (input: {
   slug: TogetherBrainAtomSlug;
 }): BrainAtom => {
+  // guard: slug must have config (type system should prevent this)
   const config = CONFIG_BY_ATOM_SLUG[input.slug];
+  if (!config)
+    UnexpectedCodePathError.throw('config not found for slug', {
+      slug: input.slug,
+    });
 
   return new BrainAtom({
     repo: 'together',
@@ -76,9 +81,16 @@ export const genBrainAtom = (input: {
         ? await castBriefsToPrompt({ briefs: askInput.role.briefs })
         : undefined;
 
+      // guard: api key required when openai client not provided via context
+      const openaiFromContext = context?.openai as OpenAI | undefined;
+      if (!openaiFromContext && !process.env.TOGETHER_API_KEY)
+        BadRequestError.throw('TOGETHER_API_KEY is required', {
+          hint: 'set TOGETHER_API_KEY env var or pass openai client via context',
+        });
+
       // get openai client from context or create new one with together ai baseURL
       const openai =
-        (context?.openai as OpenAI | undefined) ??
+        openaiFromContext ??
         new OpenAI({
           apiKey: process.env.TOGETHER_API_KEY,
           baseURL: 'https://api.together.xyz/v1',
@@ -98,12 +110,13 @@ export const genBrainAtom = (input: {
 
       // handle prompt: string or BrainPlugToolExecution[]
       const promptIsToolExecutions = Array.isArray(askInput.prompt);
+
+      // tool continuation: add assistant message with tool_calls, then tool messages
       if (promptIsToolExecutions) {
-        // tool continuation: add assistant message with tool_calls, then tool messages
         const executions = askInput.prompt as BrainPlugToolExecution[];
 
         // reconstruct assistant message with tool_calls from prior exchange
-        // note: this is needed because together ai expects the assistant message before tool messages
+        // note: together ai expects the assistant message before tool messages
         const toolCalls: OpenAI.ChatCompletionMessageToolCall[] =
           executions.map((exec) => ({
             id: exec.exid,
@@ -123,8 +136,10 @@ export const genBrainAtom = (input: {
         // add tool result messages
         const toolMessages = castIntoTogetherToolMessages({ executions });
         messages.push(...toolMessages);
-      } else {
-        // regular prompt
+      }
+
+      // regular prompt: add user message
+      if (!promptIsToolExecutions) {
         messages.push({ role: 'user', content: askInput.prompt as string });
       }
 
@@ -140,18 +155,15 @@ export const genBrainAtom = (input: {
       const hasTools = tools && tools.length > 0;
       const isToolContinuation = promptIsToolExecutions;
 
-      // fail-fast: tools + structured output schema not supported by most models
+      // guard: tools + structured output schema not supported by most models
       // vllm constraint: "model must not generate both text and tool calls in same generation"
       // when tools are plugged, output schema must be z.string() to allow plain text responses
-      if (hasTools && !isToolContinuation) {
-        const schemaType = jsonSchema.type;
-        if (schemaType !== 'string') {
-          throw new BadRequestError(
-            `when tools are plugged, output schema must be z.string() (found: ${schemaType}). most open-source models support either tool_calls or structured json, but not both. use z.string() and parse the response yourself if structure is needed.`,
-            { schemaType, tools: askInput.plugs?.tools?.map((t) => t.slug) },
-          );
-        }
-      }
+      const schemaType = jsonSchema.type;
+      if (hasTools && !isToolContinuation && schemaType !== 'string')
+        BadRequestError.throw(
+          `when tools are plugged, output schema must be z.string() (found: ${schemaType}). most open-source models support either tool_calls or structured json, but not both. use z.string() and parse the response yourself if structure is needed.`,
+          { schemaType, tools: askInput.plugs?.tools?.map((t) => t.slug) },
+        );
 
       // include response_format only when we want structured output (not tool calls)
       // vllm constraint: "model must not generate both text and tool calls in same generation"
@@ -159,28 +171,52 @@ export const genBrainAtom = (input: {
       // so we omit response_format on initial tool requests to enable tool call
       const wantsToolCalls = hasTools && !isToolContinuation;
       const wantStructuredOutput = !wantsToolCalls;
-      const response = await openai.chat.completions.create({
-        model: config.model,
-        messages,
-        ...(hasTools ? { tools, tool_choice: 'auto' as const } : {}),
-        ...(wantStructuredOutput
-          ? {
-              response_format: {
-                type: 'json_schema',
-                json_schema: {
-                  name: 'response',
-                  strict: true,
-                  schema: jsonSchema,
-                },
-              },
-            }
-          : {}),
-      });
 
-      // extract response message
+      // call together ai api
+      let response: Awaited<ReturnType<typeof openai.chat.completions.create>>;
+      try {
+        response = await openai.chat.completions.create({
+          model: config.model,
+          messages,
+          ...(hasTools ? { tools, tool_choice: 'auto' as const } : {}),
+          ...(wantStructuredOutput
+            ? {
+                response_format: {
+                  type: 'json_schema',
+                  json_schema: {
+                    name: 'response',
+                    strict: true,
+                    schema: jsonSchema,
+                  },
+                },
+              }
+            : {}),
+        });
+      } catch (error) {
+        // wrap api errors with context
+        if (!(error instanceof Error)) throw error;
+        throw new UnexpectedCodePathError(
+          `together.ai api call failed: ${error.message}`,
+          {
+            model: config.model,
+            slug: input.slug,
+            hasTools,
+            wantStructuredOutput,
+            cause: error,
+          },
+        );
+      }
+
+      // guard: response must contain a message (api contract requires this)
       const message = response.choices[0]?.message;
-      const content = message?.content ?? '';
-      const toolCalls = message?.tool_calls;
+      if (!message)
+        UnexpectedCodePathError.throw('no message in response', {
+          responseId: response.id,
+          choices: response.choices.length,
+        });
+
+      const content = message.content ?? '';
+      const toolCalls = message.tool_calls;
 
       // calculate elapsed time
       const elapsedMs = Date.now() - startedAt;

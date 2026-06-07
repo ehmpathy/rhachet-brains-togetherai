@@ -1,4 +1,4 @@
-import { BadRequestError } from 'helpful-errors';
+import { BadRequestError, UnexpectedCodePathError } from 'helpful-errors';
 import path from 'path';
 import type {
   BrainPlugToolDefinition,
@@ -19,28 +19,29 @@ const outputSchema = z.object({ content: z.string() });
 // tool use requires z.string() schema (vllm cannot do structured output + tool calls together)
 const toolOutputSchema = z.string();
 
+// guard: integration tests require api key to call together.ai
 if (!process.env.TOGETHER_API_KEY)
-  throw new BadRequestError(
-    'TOGETHER_API_KEY is required for integration tests',
-  );
+  BadRequestError.throw('TOGETHER_API_KEY is required for integration tests', {
+    hint: 'run: rhx keyrack unlock --owner ehmpath --env test',
+  });
 
 describe('genBrainAtom.integration', () => {
   jest.setTimeout(30000);
 
-  // use qwen3-coder-next for fast integration tests
-  const brainAtom = genBrainAtom({ slug: 'together/qwen3/coder-next' });
+  // use qwen3-235b for fast integration tests (serverless)
+  const brainAtom = genBrainAtom({ slug: 'together/qwen3/235b' });
 
-  // use kimi/k2.5 for tool use tests (good tool call capability)
-  const brainAtomWithTools = genBrainAtom({ slug: 'together/kimi/k2.5' });
+  // use kimi/k2.6 for tool use tests (good tool call capability)
+  const brainAtomWithTools = genBrainAtom({ slug: 'together/kimi/k2.6' });
 
-  given('[case1] genBrainAtom({ slug: "together/qwen3/coder-next" })', () => {
+  given('[case1] genBrainAtom({ slug: "together/qwen3/235b" })', () => {
     when('[t0] atom is created', () => {
       then('repo is "together"', () => {
         expect(brainAtom.repo).toEqual('together');
       });
 
-      then('slug is "together/qwen3/coder-next"', () => {
-        expect(brainAtom.slug).toEqual('together/qwen3/coder-next');
+      then('slug is "together/qwen3/235b"', () => {
+        expect(brainAtom.slug).toEqual('together/qwen3/235b');
       });
 
       then('description is defined', () => {
@@ -107,7 +108,7 @@ describe('genBrainAtom.integration', () => {
         brainAtom.ask({
           role: {},
           prompt:
-            'remember this secret code: MANGO77. respond with "code received"',
+            'remember this reference number: MANGO77. respond with "reference received"',
           schema: { output: outputSchema },
         }),
       );
@@ -128,7 +129,7 @@ describe('genBrainAtom.integration', () => {
         brainAtom.ask({
           role: {},
           prompt:
-            'remember this secret code: PAPAYA99. respond with "code stored"',
+            'remember this reference number: PAPAYA99. respond with "reference stored"',
           schema: { output: outputSchema },
         }),
       );
@@ -137,7 +138,7 @@ describe('genBrainAtom.integration', () => {
         brainAtom.ask({
           on: { episode: resultFirst.episode },
           role: {},
-          prompt: 'what was the secret code i told you to remember?',
+          prompt: 'what was the reference number i asked you to remember?',
           schema: { output: outputSchema },
         }),
       );
@@ -153,18 +154,20 @@ describe('genBrainAtom.integration', () => {
   });
 
   given('[case4] all models leverage briefs', () => {
-    // note: kimi/k2 excluded due to persistent 503 availability issues on together ai
-    // the model is still in BrainAtom.config for users who want to try it
+    // test representative sample from each tier (all serverless)
+    // note: lfm2/24b and gpt-oss excluded - they don't follow structured output reliably
     const allSlugs: TogetherBrainAtomSlug[] = [
-      'together/qwen3/coder-next',
-      'together/qwen3/coder-480b',
-      'together/qwen3/235b',
-      'together/deepseek/v3.1',
-      'together/deepseek/r1',
-      'together/kimi/k2.5',
-      'together/llama4/maverick',
-      'together/llama3.3/70b',
-      'together/glm/4.7',
+      // cheap tier
+      'together/qwen3.5/9b', // cheap
+      'together/gemma4/31b', // cheap with vision
+      // balanced tier
+      'together/qwen3/235b', // general purpose
+      'together/qwen3.5/397b', // large moe with vision
+      'together/llama3.3/70b', // dense
+      // frontier tier
+      'together/deepseek/v4-pro', // frontier (80.6% swe)
+      'together/kimi/k2.6', // frontier (80.2% swe)
+      'together/glm/5.1', // frontier (77.8% swe)
     ];
 
     const briefs = [
@@ -258,8 +261,12 @@ describe('genBrainAtom.integration', () => {
       const resultSecond = useThen(
         'second ask with tool executions succeeds',
         async () => {
+          // guard: test assumes first result has tool invocation
           const invocation = resultFirst.calls?.tools?.[0];
-          if (!invocation) throw new Error('no tool invocation found');
+          if (!invocation)
+            UnexpectedCodePathError.throw('no tool invocation found', {
+              resultFirst,
+            });
 
           const executions: BrainPlugToolExecution[] = [
             {
@@ -309,8 +316,12 @@ describe('genBrainAtom.integration', () => {
           plugs: { tools: [weatherTool] },
         });
 
+        // guard: test assumes first result has tool invocation
         const invocation = resultFirst.calls?.tools?.[0];
-        if (!invocation) throw new Error('no tool invocation found');
+        if (!invocation)
+          UnexpectedCodePathError.throw('no tool invocation found', {
+            resultFirst,
+          });
 
         // continue with error:constraint signal
         const executions: BrainPlugToolExecution[] = [
@@ -348,8 +359,12 @@ describe('genBrainAtom.integration', () => {
           plugs: { tools: [weatherTool] },
         });
 
+        // guard: test assumes first result has tool invocation
         const invocation = resultFirst.calls?.tools?.[0];
-        if (!invocation) throw new Error('no tool invocation found');
+        if (!invocation)
+          UnexpectedCodePathError.throw('no tool invocation found', {
+            resultFirst,
+          });
 
         // continue with error:malfunction signal
         const executions: BrainPlugToolExecution[] = [
@@ -385,17 +400,17 @@ describe('genBrainAtom.integration', () => {
   // this is a Together AI limitation; xAI handles this differently
 
   given('[case9] tool use model compatibility', () => {
-    // note: kimi/k2 excluded due to persistent 503 availability issues on together ai
-    // the model is still in BrainAtom.config for users who want to try it
+    // all serverless models with tool use support
     const toolCompatSlugs: TogetherBrainAtomSlug[] = [
-      'together/qwen3/coder-next',
-      'together/qwen3/coder-480b',
       'together/qwen3/235b',
-      'together/deepseek/v3.1',
-      'together/kimi/k2.5',
-      'together/llama4/maverick',
+      'together/qwen3.5/9b',
+      'together/qwen3.5/397b',
       'together/llama3.3/70b',
-      'together/glm/4.7',
+      // frontier models with tool use
+      'together/deepseek/v4-pro',
+      'together/kimi/k2.6',
+      'together/glm/5',
+      'together/glm/5.1',
     ];
 
     for (const slug of toolCompatSlugs) {
@@ -434,10 +449,10 @@ describe('genBrainAtom.integration', () => {
       },
     };
 
-    // test tool use on models that support it
+    // test tool use on frontier models (serverless)
     const modelsToTest: TogetherBrainAtomSlug[] = [
-      'together/kimi/k2.5',
-      'together/glm/4.7',
+      'together/deepseek/v4-pro',
+      'together/kimi/k2.6',
     ];
 
     for (const slug of modelsToTest) {
@@ -465,9 +480,14 @@ describe('genBrainAtom.integration', () => {
             'calculator.multiply',
           );
 
-          // second call: feed tool result, expect text output
+          // guard: test assumes first result has tool call
           const toolCall = resultFirst.calls?.tools?.[0];
-          if (!toolCall) throw new Error('no tool call in first result');
+          if (!toolCall)
+            UnexpectedCodePathError.throw('no tool call in first result', {
+              resultFirst,
+            });
+
+          // second call: feed tool result, expect text output
 
           const resultSecond = await atom.ask({
             on: { episode: resultFirst.episode },
