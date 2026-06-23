@@ -31,7 +31,6 @@ export type TogetherBrainAtomSlug =
   // llama family (serverless)
   | 'together/llama3.3/70b'
   // glm family (serverless)
-  | 'together/glm/5'
   | 'together/glm/5.1'
   | 'together/glm/5.2'
   // gemma family
@@ -346,42 +345,6 @@ export const CONFIG_BY_ATOM_SLUG: Record<
         size: { context: { tokens: 262_000 } }, // 262K context
         grades: { swe: 80.2 }, // 80.2% swe-bench verified
         cutoff: '2026-05-01',
-        domain: 'ALL',
-        skills: { tooluse: true },
-      },
-    }),
-  },
-  /**
-   * glm-5
-   * .sources:
-   *   - model: https://www.together.ai/models/glm-5
-   *   - rates: $1.00/1M input, $3.20/1M output
-   *   - context: 202K
-   *   - architecture: 744B total, 40B active (moe)
-   */
-  'together/glm/5': {
-    model: 'zai-org/GLM-5',
-    description: 'glm-5 - frontier (202K)',
-    spec: new BrainSpec({
-      cost: {
-        time: {
-          speed: { tokens: 90, per: { seconds: 1 } },
-          latency: { seconds: 0.9 },
-        },
-        cash: {
-          per: 'token',
-          cache: {
-            get: asIsoPrice('$0'),
-            set: asIsoPrice('$0'),
-          },
-          input: dividePrice({ of: '$1.00', by: 1_000_000 }), // $1.00/1M tokens
-          output: dividePrice({ of: '$3.20', by: 1_000_000 }), // $3.20/1M tokens
-        },
-      },
-      gain: {
-        size: { context: { tokens: 202_000 } }, // 202K context
-        grades: { swe: 77.8 }, // 77.8% swe-bench verified
-        cutoff: '2026-02-01',
         domain: 'ALL',
         skills: { tooluse: true },
       },
