@@ -409,8 +409,8 @@ describe('genBrainAtom.integration', () => {
       // frontier models with tool use
       'together/deepseek/v4-pro',
       'together/kimi/k2.6',
-      'together/glm/5',
       'together/glm/5.1',
+      'together/glm/5.2',
     ];
 
     for (const slug of toolCompatSlugs) {

@@ -7,9 +7,9 @@ import { getBrainAtomsByTogetherAI } from './index';
 describe('rhachet-brains-togetherai.unit', () => {
   given('[case1] getBrainAtomsByTogetherAI', () => {
     when('[t0] called', () => {
-      then('returns array with 14 atoms', () => {
+      then('returns array with 15 atoms', () => {
         const atoms = getBrainAtomsByTogetherAI();
-        expect(atoms).toHaveLength(14);
+        expect(atoms).toHaveLength(15);
       });
 
       then('returns BrainAtom instances', () => {
