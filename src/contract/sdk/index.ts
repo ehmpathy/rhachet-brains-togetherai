@@ -21,8 +21,10 @@ export const getBrainAtomsByTogetherAI = (): BrainAtom[] => {
     // llama family (serverless)
     genBrainAtom({ slug: 'together/llama3.3/70b' }),
     // glm family (serverless)
-    genBrainAtom({ slug: 'together/glm/5' }),
     genBrainAtom({ slug: 'together/glm/5.1' }),
+    genBrainAtom({ slug: 'together/glm/5.2' }),
+    // minimax family
+    genBrainAtom({ slug: 'together/minimax/m3' }),
     // gemma family
     genBrainAtom({ slug: 'together/gemma4/31b' }),
     // liquid family
